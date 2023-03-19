@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Home</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <h1>ROBOTEX FOLKRACE ROBOT</h1>
+    <div class = "container">
+        <div class = "left_container">
+            <a href="{{ url_for('train_page') }}">
+                <div class = "btn" id = "train">TRAIN</div>
+        </div>
+
+        <div class = "right_container">
+            <a href="{{ url_for('race_page') }}">
+                <div class = "btn" id = "race">RACE</div>
+        
+        </div>
+    </div>
+
+    <script>
+        let btns = document.querySelector(".container")
+
+        btns.addEventListener("mousedown", change_colour)
+        btns.addEventListener("mouseup", revert_colour)
+        btns.addEventListener("mousemove", revert_colour)
+
+        btns.addEventListener("touchstart", change_colour)
+        btns.addEventListener("touchend", revert_colour)
+        btns.addEventListener("touchmove", revert_colour)
+
+        // change colour of buttons 
+        function change_colour(e){
+            if (e.target.classList.contains("btn")) {
+                e.target.classList.add("change_colour")
+            }
+        }
+
+        // revert buttons back to their original colours 
+        function revert_colour(e){
+            if (e.target.classList.contains("change_colour")) {
+                e.target.classList.remove("change_colour")
+            }
+        }
+
+    </script>
+
+</body>
+
+
+
+
+</html>

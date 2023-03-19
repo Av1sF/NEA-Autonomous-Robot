@@ -1,0 +1,163 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+
+    <title>Race</title>
+    <meta name="viewport" content="user-scable=no, width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script type="text/javascript" src="/static/js/jquery.min.js" ></script>
+    <script type = 'text/javascript' src="/static/js/socket.io.min.js" ></script>
+
+</head>
+
+<body>
+    <h1>RACE</h1>
+
+    <div class = "container prevent-select">
+
+        <div class = "left_container">
+            <div class = "btn" id = "race_start">START</div>
+        </div>
+
+        <div class = "right_container">
+            <div class = "btn" id = "race_stop">STOP</div>
+        </div>
+
+    </div>
+
+    <script>
+        // initalise sockets 
+        const sio = io();
+        
+        sio.on('connect', () => {
+            console.log('connected');
+        });
+
+        sio.on('disconnect', () => {
+            sio.emit('race', false)
+            console.log('disconnected');
+        });
+
+        // countdown starts from 4 seconds instead of 5 because a delay of one second was found when timer started counting for 5 seconds 
+        let countdown = 4
+        var timer;
+        var countdownOn = true;
+        let startbtn = document.querySelector("#race_start")
+        let stopbtn = document.querySelector("#race_stop")
+
+        window.addEventListener('load', () => {
+
+            //start button 
+            startbtn.addEventListener("mousedown", change_colour)
+            startbtn.addEventListener("mouseup", start_race)
+            startbtn.addEventListener("mousemove", revert_colour)
+            
+            startbtn.addEventListener("touchstart", change_colour)
+            startbtn.addEventListener("touchend", start_race)
+            startbtn.addEventListener("touchmove", revert_colour)
+
+            //stop button 
+       
+            stopbtn.addEventListener("mousedown", change_colour)
+            stopbtn.addEventListener("mouseup", stop_race)
+            stopbtn.addEventListener("mousemove", revert_colour)
+
+            stopbtn.addEventListener("touchstart", change_colour)
+            stopbtn.addEventListener("touchend", stop_race)
+            stopbtn.addEventListener("touchmove", revert_colour)
+        });
+
+        // change colour of buttons 
+        function change_colour(e){
+            if (e.target.classList.contains("btn")) {
+                e.target.classList.add("change_colour")
+            }
+        }
+
+        // revert colour of buttons back to original colour 
+        function revert_colour(e){
+            if (e.target.classList.contains("change_colour")) {
+                e.target.classList.remove("change_colour")
+            } else {
+                e.target.classList.remove("change_colour_green") 
+            }
+        }
+
+
+        function start_race(e){
+            // revert button back to original colour 
+            e.target.classList.remove("change_colour")
+
+            // 5 second count down timer 
+            e.target.innerHTML = 5;
+            countdownOn = true
+            let timer = setInterval(function(){
+                if (countdownOn == true) {
+                    if(countdown <= 0){
+                        clearInterval(timer); 
+                        e.target.innerHTML = "GO!"
+                        e.target.classList.add("change_colour_green")
+                        countdown = 4
+
+                        // emits a signal to tell the server-side to start querying the neural network 
+                        sio.emit('race',true)
+
+                    } else {
+                        document.getElementById("race_start").innerHTML = countdown;
+                    }
+                    countdown -= 1
+                } else {
+                    clearInterval(timer)
+                    countdown = 4
+                }
+
+            }, 1000);
+
+            // remove event listeners so start button can not be clicked twice 
+            startbtn.removeEventListener("mouseup", start_race)
+            startbtn.removeEventListener("mousedown", change_colour)
+            startbtn.removeEventListener("mousemove", revert_colour)
+            startbtn.removeEventListener("touchstart", start_race)
+            startbtn.removeEventListener("touchend", change_colour)
+            startbtn.removeEventListener("touchmove", revert_colour)
+        }
+
+        function stop_race(e){
+            // revert button back to original colour 
+            e.target.classList.remove("change_colour")
+
+            // stop race if start button does not say "START"
+            if (startbtn.innerHTML != "START") {
+                startbtn.innerHTML = "START"
+                countdownOn = false
+
+                // emits a signal to tell the server-side to stop querying the neural network
+                sio.emit('race', false)
+
+                // allow start button to be clicked again 
+                startbtn.addEventListener("mouseup", start_race)
+                startbtn.addEventListener("mousedown", change_colour)
+                startbtn.addEventListener("mousemove", revert_colour)
+                startbtn.addEventListener("touchstart", start_race)
+                startbtn.addEventListener("touchend", change_colour)
+                startbtn.addEventListener("touchmove", revert_colour)
+
+                countdown = 4
+
+                // revert start button back to original colour 
+                if (startbtn.classList.contains("change_colour_green")) {
+                    startbtn.classList.remove("change_colour_green")
+                }
+            
+            // page is reloaded due to a bug with setInterval() which causes the countdown to be inaccurate sometimes when setInterval is used multiple times
+            window.location.reload();
+            } 
+        }   
+
+    </script>
+</body>
+
+
+
+</html>

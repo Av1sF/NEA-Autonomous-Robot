@@ -1,0 +1,13 @@
+[Unit]
+Desciption=NEArobot
+After=network.target
+
+[Service]
+WorkingDirectory=/home/pi/Desktop/rewriteNEArobotwebsite
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/Desktop/NEArobotwebsite/app.py
+Restart=on-failure
+StartLimitBurst=100
+
+[Install]
+WantedBy=multi-user.target

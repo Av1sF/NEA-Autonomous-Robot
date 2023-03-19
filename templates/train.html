@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title>Training Controller</title>
+    <meta name="viewport" content="user-scable=no, width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script type="text/javascript" src="/static/js/jquery.min.js" ></script>
+    <script type = 'text/javascript' src="/static/js/socket.io.min.js" ></script>
+
+</head>
+
+<body>
+    <h1 class = "prevent-select">TRAINING CONTROLLER</h1>
+
+    <div class = "container prevent-select">
+        <div class = "left_container" id = "joystick">
+            <p>
+                Angle: <span id="angle"></span>
+                Throttle: <span id="throttle_speed"></span>
+            </p>
+            <canvas id="canvas" name="joystick"></canvas>
+        </div>
+
+        <div class ="right_container">
+            <div class = "btn" id = "start">START</div>
+            <div class = "btn" id = "stop">STOP</div>
+            <div class = "btn" id = "retrain">RETRAIN MODEL</div>
+        </div>
+
+    </div>
+
+
+    <script>
+        // dictionary which holds angle of where joy stick is and weather robot is moving forwards, backwards, or stopping
+        let angle_throttle = {a: 90, t: 0};
+        var xRelative, yRelative;
+        var canvas, ctx;
+        var width, height, radius, x_orig, y_orig;
+        let coord = { x: 0, y: 0 };
+        let paint = false;
+        let training = false;
+
+        //  initalise sockets 
+        const sio = io();
+        
+        sio.on('connect', () => {
+            console.log('connected');
+        });
+
+        sio.on('disconnect', () => {
+            // emit message to server side to stop robot and to stop recording data to create a training dataset 
+            sio.emit('train', 0) 
+            sio.emit('train', {a: 90, t:0})
+            console.log('disconnected'); 
+        });
+
+
+        let end_btn = document.querySelector("#stop")
+        let start_btn = document.querySelector("#start")
+        let retrain_btn = document.querySelector("#retrain")
+
+        window.addEventListener('load', () => {
+            // start button event listeners 
+            start_btn.addEventListener("mousedown", change_colour)
+            start_btn.addEventListener("mouseup", start_training)
+            start_btn.addEventListener("mousemove", revert_colour)
+
+            start_btn.addEventListener("touchstart", change_colour)
+            start_btn.addEventListener("touchend", start_training)
+            start_btn.addEventListener("touchmove", revert_colour)
+            
+
+            //joystick event listeners 
+            let draw_area = document.querySelector("#joystick")
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');          
+            resize(); 
+
+            draw_area.addEventListener('mousedown', startDrawing);
+            draw_area.addEventListener('mouseup', stopDrawing);
+            draw_area.addEventListener('mousemove', Draw);
+            draw_area.addEventListener('mouseleave', stopDrawing)
+
+            draw_area.addEventListener('touchstart', startDrawing);
+            draw_area.addEventListener('touchend', stopDrawing);
+            draw_area.addEventListener('touchcancel', stopDrawing);
+            draw_area.addEventListener('touchmove', Draw);
+            draw_area.addEventListener('mouseleave', stopDrawing)
+            
+            window.addEventListener('resize', resize);
+
+            document.getElementById("angle").innerText = 90;
+            document.getElementById("throttle_speed").innerText = 0;
+
+
+        });
+
+
+        // change colour of buttons 
+        function change_colour(e){
+            if (e.target.classList.contains("btn")) {
+                e.target.classList.add("change_colour")
+            }
+        }
+
+        // revert colour of buttons back to original colour 
+        function revert_colour(e){
+            if (e.target.classList.contains("change_colour")) {
+                e.target.classList.remove("change_colour")
+            }
+        }
+
+        function start_training(e){
+            // emit signal to server-side to indicate it should start recording data for to create a training file
+            sio.emit('train', 1)
+            console.log("training starting...")
+
+            // revert button back to original colour 
+            if (e.target.classList.contains("change_colour")) {
+                e.target.classList.remove("change_colour")
+            }
+
+            // make start button unclickable 
+            start_btn.removeEventListener("mousedown", change_colour)
+            start_btn.removeEventListener("mouseup", start_training)
+            start_btn.removeEventListener("mousemove", revert_colour)
+
+            start_btn.removeEventListener("touchstart", change_colour)
+            start_btn.removeEventListener("touchend", start_training)
+            start_btn.removeEventListener("touchmove", revert_colour)
+
+            // allow end button to be now clickable 
+            end_btn.addEventListener("mousedown", change_colour)
+            end_btn.addEventListener("mouseup", stop_training)
+            end_btn.addEventListener("mousemove", revert_colour)
+
+            end_btn.addEventListener("touchstart", change_colour)
+            end_btn.addEventListener("touchend", stop_training)
+            end_btn.addEventListener("touchmove", revert_colour)
+        }
+ 
+        function stop_training(e){
+            // emit signal to server side to indicate it should stop recording data for training file
+            sio.emit('train', 0) 
+
+            // allow client-side to download training file that was just created 
+            var link = document.createElement('a')
+            link.setAttribute('href', "/download")
+            document.body.appendChild(link);
+            link.target = '_blank';
+            link.click();
+            link.remove()
+
+
+            // allow start button to be clickable again 
+            start_btn.addEventListener("mousedown", change_colour)
+            start_btn.addEventListener("mouseup", start_training)
+            start_btn.addEventListener("mousemove", revert_colour)
+
+            start_btn.addEventListener("touchstart", change_colour)
+            start_btn.addEventListener("touchend", start_training)
+            start_btn.addEventListener("touchmove", revert_colour)
+
+            // make end button unclickable 
+            end_btn.removeEventListener("mousedown", change_colour)
+            end_btn.removeEventListener("mouseup", start_training)
+            end_btn.removeEventListener("mousemove", revert_colour)
+            
+            end_btn.removeEventListener("touchstart", change_colour)
+            end_btn.removeEventListener("touchend", start_training)
+            end_btn.removeEventListener("touchmove", revert_colour)
+
+            // allow retrain model button to be clickable, so users can decide whether they want to use the data 
+            // they just collected to retrain the neural network 
+            retrain_btn.addEventListener("mousedown", change_colour)
+            retrain_btn.addEventListener("mouseup", retrain_neuralnet)
+            retrain_btn.addEventListener("mousemove", revert_colour)
+            
+            retrain_btn.addEventListener("touchstart", change_colour)
+            retrain_btn.addEventListener("touchend", retrain_neuralnet)
+            retrain_btn.addEventListener("touchmove", revert_colour)
+
+        function retrain_neuralnet(e){
+            if (e.target.classList.contains("change_colour")) {
+                e.target.classList.remove("change_colour")
+            }
+
+            // emit signal to the server-side to retrain the neuralnetwork with the most recently created training file 
+            sio.emit('train', "retrain model") 
+
+            // make the retrain button unclickable until another training file has been created 
+            retrain_btn.removeEventListener("mousedown", change_colour)
+            retrain_btn.removeEventListener("mouseup", retrain_neuralnet)
+            retrain_btn.removeEventListener("mousemove", revert_colour)
+            
+            retrain_btn.removeEventListener("touchstart", change_colour)
+            retrain_btn.removeEventListener("touchend", retrain_neuralnet)
+            retrain_btn.removeEventListener("touchmove", revert_colour)
+        }
+            
+            // revert button back to original colour 
+            if (e.target.classList.contains("change_colour")) {
+                e.target.classList.remove("change_colour")
+            }
+
+           
+        }
+
+        // joystick / canvas 
+        function resize() {
+            // resize canvas according to window 
+            width = window.innerWidth; // set variable width to = window width
+            radius = 100; 
+            height = radius * 7; // set the variable height 
+            ctx.canvas.width = width / 2;
+            ctx.canvas.height = height/ 1.5;
+            background();
+            // draw joystick according to width and height
+            joystick(width / 4, height / 3);
+        }
+
+        function background() {
+            // create gray circle behind the red joystick 
+            x_orig = width / 4;
+            y_orig = height / 3;
+
+            ctx.beginPath();
+            ctx.arc(x_orig, y_orig, radius + 20, 0, Math.PI * 2, true);
+            ctx.fillStyle = '#ECE5E5';
+            ctx.fill();
+        }
+
+        function joystick(width, height) {
+            // draw red joystick 
+            ctx.beginPath();
+            ctx.arc(width, height, radius * 0.75, 0, Math.PI * 2, true);
+            ctx.fillStyle = '#F08080';
+            ctx.fill();
+            ctx.strokeStyle = '#F6ABAB';
+            ctx.lineWidth = 8;
+            ctx.stroke();
+        }
+
+
+        function getPosition(event) {
+            // get absolute mouse/touch position 
+            var mouse_x = event.clientX || event.touches[0].clientX;
+            var mouse_y = event.clientY || event.touches[0].clientY;
+            coord.x = mouse_x - canvas.offsetLeft;
+            coord.y = mouse_y - canvas.offsetTop;
+        }
+
+        function is_it_in_the_circle(radius) {
+            // checks if mouse is within joystick's gray circle radius 
+            var current_radius = Math.sqrt(Math.pow(coord.x - x_orig, 2) + Math.pow(coord.y - y_orig, 2));
+            if (radius >= current_radius) return true
+            else return false
+        }
+
+        function getAngleThrottle(x,y) {
+            // get corresponding angle and throttle of robot based on relative x and y coordinates
+
+            if  (! is_it_in_the_circle(20)) {
+                if (-100 <= y && y < 0) { // if mouse position is in the top half the circle
+                    angle_throttle.t = 1;
+
+                    if (-100 <= x && x < -60){
+                        angle_throttle.a = 0;
+                    } else if (-60 <= x && x < -20){
+                        angle_throttle.a = 45;
+                    } else if (-20 <= x && x < 20){
+                        angle_throttle.a = 90;
+                    } else if (20 <= x && x < 60){
+                        angle_throttle.a = 135;
+                    } else {
+                        angle_throttle.a = 180;
+                    }
+
+                } else if (0 < y && y <= 100) { // if mouse position is in the lower half the circle
+                    angle_throttle.a = 90;
+                    angle_throttle.t = -1;
+                }
+
+            } else { // if the mouse position is near the middle 
+                    angle_throttle.a = 90;
+                    angle_throttle.t = 0;
+                }
+
+            return angle_throttle
+
+
+        }
+
+        function startDrawing(event) {
+            paint = true;
+            getPosition(event);
+            // if the mouse position is in the circle, redraw joystick 
+            if (is_it_in_the_circle(100)) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                background();
+             
+                joystick(coord.x, coord.y);
+                Draw(event);
+            }
+            
+        }
+
+
+        function stopDrawing() {
+            // when mouse is off canvas, redraw joystick at original position 
+            paint = false;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            background();
+            joystick(width / 4, height / 3);
+           
+            document.getElementById("angle").innerText = 90;
+            document.getElementById("throttle_speed").innerText = 0;
+            // emit signal to server-side to stop the robot moving 
+            sio.emit('train', {a: 90, t:0})
+
+        }
+
+        function Draw(event) {
+
+            if (paint) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                background();
+
+                var x, y;
+                var angle = Math.atan2((coord.y - y_orig), (coord.x - x_orig));
+                
+                
+                if (is_it_in_the_circle(100)) {
+                    joystick(coord.x, coord.y);
+                    x = coord.x;
+                    y = coord.y;
+                }
+                else {
+                    x = radius * Math.cos(angle) + x_orig;
+                    y = radius * Math.sin(angle) + y_orig;
+                    joystick(x, y);
+                }
+
+            
+                getPosition(event);
+
+                // get x and y coordinate within canvas 
+                var x_relative = Math.round(x - x_orig);
+                var y_relative = Math.round(y - y_orig);
+                // get corresponding angle and throttle based on relative position
+                getAngleThrottle(x_relative, y_relative)
+                
+                // emit the angle and throttle of the joy stick to the server side
+                sio.emit('train', angle_throttle)
+                
+
+                document.getElementById("angle").innerText = angle_throttle.a;
+                document.getElementById("throttle_speed").innerText = angle_throttle.t;
+
+           
+            }
+        } 
+    </script>
+</body>
+
+</html>
