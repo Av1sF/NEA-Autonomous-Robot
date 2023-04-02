@@ -40,21 +40,6 @@ qRace = Queue()
 Raspberry Pi start up 
 """
 
-# #check if there are unkilled processes from the last time program is ran
-# with open('/home/pi/Desktop/NEArobotwebsite/pidofprocesses/pid.txt', 'r') as file:
-#     while True:
-#         try:
-#             pids = file.readlines()
-#             if pids:
-#                 for process in pids:
-#                     os.kill(int(process), signal.SIGKILL)
-#                 break
-#         except Exception as e:
-#             print(e)
-
-# #clear the txt file
-# open('/home/pi/Desktop/NEArobotwebsite/pidofprocesses/pid.txt', 'w').close()
-
 
 # tries finds right ip address until raspberry pi is connected to the right router 
 ip = ''
@@ -139,13 +124,6 @@ def connect():
 
 @sio.on('disconnect')
 def disconnect():
-    # make sure both queues are empty when user disconnects
-    # so robot does not continue to process left over messages/instructions in queue
-    while not qTrain.empty():
-        qTrain.get()
-    while not qRace.empty():
-        qRace.get()
-
     # empty train file incase user disconnected without pressing the stop button on training webpage 
     trainController.clear_train_file()
         
@@ -180,15 +158,5 @@ if __name__ == "__main__":
     controllerProcess = Process(target=trainController.sort_queue, args=(qTrain, ), daemon= True)
     controllerProcess.start()
     raceProcess.start()
-
-    # # store the process ID of started processes in a local text file in the case they are left unkilled 
-    # raceProcessPID = raceProcess.pid
-    # controllerProcessPID = controllerProcess.pid
-
-    # with open('/home/pi/Desktop/NEArobotwebsite/pidofprocesses/pid.txt', 'w') as file:
-    #     file.write(f"{raceProcessPID}\n")
-    #     file.write(f"{controllerProcessPID}\n")
-
-
 
     sio.run(app, host=ip, debug=False, port=5000, allow_unsafe_werkzeug=True)

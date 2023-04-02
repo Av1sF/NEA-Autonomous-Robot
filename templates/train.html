@@ -52,7 +52,6 @@
         sio.on('disconnect', () => {
             // emit message to server side to stop robot and to stop recording data to create a training dataset 
             sio.emit('train', 0) 
-            sio.emit('train', {a: 90, t:0})
             console.log('disconnected'); 
         });
 
@@ -87,7 +86,7 @@
             draw_area.addEventListener('touchend', stopDrawing);
             draw_area.addEventListener('touchcancel', stopDrawing);
             draw_area.addEventListener('touchmove', Draw);
-            draw_area.addEventListener('mouseleave', stopDrawing)
+            
             
             window.addEventListener('resize', resize);
 
@@ -245,7 +244,7 @@
 
 
         function getPosition(event) {
-            // get absolute mouse/touch position 
+            // get absolute and relative mouse/touch position 
             var mouse_x = event.clientX || event.touches[0].clientX;
             var mouse_y = event.clientY || event.touches[0].clientY;
             coord.x = mouse_x - canvas.offsetLeft;
@@ -253,7 +252,7 @@
         }
 
         function is_it_in_the_circle(radius) {
-            // checks if mouse is within joystick's gray circle radius 
+            // checks if mouse is within joystick's circle radius 
             var current_radius = Math.sqrt(Math.pow(coord.x - x_orig, 2) + Math.pow(coord.y - y_orig, 2));
             if (radius >= current_radius) return true
             else return false
@@ -343,8 +342,6 @@
                     joystick(x, y);
                 }
 
-            
-                getPosition(event);
 
                 // get x and y coordinate within canvas 
                 var x_relative = Math.round(x - x_orig);

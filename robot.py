@@ -37,7 +37,7 @@ class controller:
 
     
     def _adjust_direction(self, angle, throttle):
-        # instruct arduino to move the robot in a certain direction by sending serial message
+        # instruct arduino to move the robot in a certain direction or retrieve sensor data by sending serial message
         self.__ser.write(self.__COMMANDS[f"{angle}{throttle}"])
      
 
@@ -49,7 +49,7 @@ train class - handles events from the training webpage
 class train:
     
     def __init__(self, controller, neuralNetwork):
-        #composite classes 
+        #aggrated classes 
         self.__controller = controller
         self.__neuralNetwork = neuralNetwork
 
@@ -108,9 +108,10 @@ class train:
                 # create csv file to store data that was recorded
                 self.__compile()
                 self.__recordValid = None
-                if self.__retrainNeuralnet:
-                    self.__neuralNetwork._retrain()
-                    self.__retrainNeuralnet = False
+                
+            if self.__retrainNeuralnet:
+                self.__neuralNetwork._retrain()
+                self.__retrainNeuralnet = False
                 
     def __write(self, data):
         # add new record into list of current recorded data
@@ -133,14 +134,14 @@ class train:
                         writer = csv.writer(f)
                         writer.writerow(header)
                         writer.writerows(rows)
-                        self.clear_train_file()
+                        self.__clear_train_file()
                         break
 
                 except Exception as e:
                     
                     print(f"File not found: {e}")
     
-    def clear_train_file(self):
+    def __clear_train_file(self):
         self.__trainList = []
 
 """
@@ -153,13 +154,13 @@ class race:
         self.__neuralNetwork = neuralNetwork
         self.__startRace = None
 
-    def sort_queue(self, q_race):
+    def sort_queue(self, q):
     
         while True:
-            if not q_race.empty():
+            if not q.empty():
                 try:
                   
-                    self.__startRace = q_race.get()
+                    self.__startRace = q.get()
 
                     if self.__startRace == False:
                         #stop robot if start race button is not pressed
@@ -179,11 +180,11 @@ class race:
 
     def __predict_adjust(self, detected):
         # query neural network and adjust robot according to the prediction 
-        neural_network_prediction = self.__neuralNetwork._query(detected)
-        self.__controller._adjust_direction(neural_network_prediction[0], neural_network_prediction[1])
+        neuralNetworkPrediction = self.__neuralNetwork._query(detected)
+        self.__controller._adjust_direction(neuralNetworkPrediction[0], neuralNetworkPrediction[1])
 
 """
-neural_network - 3-layer neural network for when the robot is autonomous 
+neural_network class- 3-layer neural network for when the robot is autonomous 
 """
 
 class neural_network:
@@ -196,9 +197,9 @@ class neural_network:
         self.__onodes = outputnodes
 
         # maps index in the list of output nodes to the classification label they represent 
-        self.__targetOutputNodes = {0:0, 45:1, 90:2, 135:3, 180:4, -90:5}
+        self.__TARGETOUTPUTNODES = {0:0, 45:1, 90:2, 135:3, 180:4, -90:5}
 
-        self.__angleThrottle = [[0,1], [45, 1], [90,1],[135,1], [180,1], [90, -1]]
+        self.__ANGLETHROTTLE = [[0,1], [45, 1], [90,1],[135,1], [180,1], [90, -1]]
         self.__epochs = epochs
 
         # load weights of neural network, path hardcoded due to errors with finding path when running from raspberry pi startup 
@@ -212,7 +213,7 @@ class neural_network:
         self.__lr = learningrate
         
         # activation function is the sigmoid function
-        self.__activationFunction = lambda x: 1.0 / (1.0 + numpy.exp(-x))
+        self.__ACTIVATIONFUNCTION = lambda x: 1.0 / (1.0 + numpy.exp(-x))
     
     def get_train_file(self): 
         # get most recent train file 
@@ -256,7 +257,7 @@ class neural_network:
                 # create target/desired output nodes with all nodes having a value of 0.01 except for the right classifer
                 # node which will have a value of 0.99
                 targetsList = numpy.zeros(self.__onodes) + 0.01 
-                targetsList[self.__targetOutputNodes.get(record[-1])] = 0.99
+                targetsList[self.__TARGETOUTPUTNODES.get(record[-1])] = 0.99
 
                 #convert into 2d arrays
                 inputs = numpy.array(inputsList, ndmin=2).T
@@ -265,13 +266,13 @@ class neural_network:
                 # calculate signals into hidden layer
                 hiddenInputs = numpy.dot(self.__wih, inputs)
                 # calculate the signals emerging from hidden layer
-                hiddenOutputs = self.__activationFunction(hiddenInputs)
+                hiddenOutputs = self.__ACTIVATIONFUNCTION(hiddenInputs)
                 
                 # calculate signals into final output layer
                 finalInputs = numpy.dot(self.__who, hiddenOutputs)
 
                 # calculate the signals emerging from final output layer
-                finalOutputs = self.__activationFunction(finalInputs)
+                finalOutputs = self.__ACTIVATIONFUNCTION(finalInputs)
                 
                 #backpropagating errors
                 # output layer error is the (target - actual)
@@ -294,41 +295,41 @@ class neural_network:
     
                 
 
-    def _query(self, sensor_reading): #pass list of infrared sensor readings
+    def _query(self, sensorReading): #pass list of infrared sensor readings
 
         prediction = []
 
         # map infrared sensor readings to ranges 0.01 - 0.99 
-        sensor_reading = (numpy.asfarray(sensor_reading) /500.0 * 0.99) + 0.01
+        sensorReading = (numpy.asfarray(sensorReading) /500.0 * 0.99) + 0.01
 
         # convert inputs list to 2d array
-        inputs = numpy.array(sensor_reading, ndmin=2).T
+        inputs = numpy.array(sensorReading, ndmin=2).T
         
         # calculate signals into hidden layer
         hiddenInputs = numpy.dot(self.__wih, inputs)
 
         # calculate the signals emerging from hidden layer
-        hiddenOutputs = self.__activationFunction(hiddenInputs)
+        hiddenOutputs = self.__ACTIVATIONFUNCTION(hiddenInputs)
         
         # calculate signals into final output layer
         finalInputs = numpy.dot(self.__who, hiddenOutputs)
 
         # calculate the signals emerging from final output layer
-        finalOutputs = self.__activationFunction(finalInputs)
+        finalOutputs = self.__ACTIVATIONFUNCTION(finalInputs)
         
         # gets index of node with the highest accuracy rate 
-        classification_label = numpy.argmax(finalOutputs)
+        classificationLabel = numpy.argmax(finalOutputs)
 
         # maps classification label to angle and throttle 
-        prediction = self.__angleThrottle[classification_label]
+        prediction = self.__ANGLETHROTTLE[classificationLabel]
 
         return prediction 
    
     
     def __save_weights(self):
         # save current weights into txt file 
-        numpy.savetxt(f'{os.getcwd()}/neuralnetworkweights/wih.txt',self.__wih, fmt='%d')
-        numpy.savetxt(f'{os.getcwd()}/neuralnetworkweights/who.txt', self.__who, fmt='%d')
+        numpy.savetxt(f'{os.getcwd()}/neuralnetworkweights/wih.txt',self.__wih')
+        numpy.savetxt(f'{os.getcwd()}/neuralnetworkweights/who.txt', self.__who)
     
     def __reload_weights(self):
         # load weights of neural network, path hardcoded due to errors with finding path when running from raspberry pi startup 
